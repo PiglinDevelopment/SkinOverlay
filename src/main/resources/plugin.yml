@@ -1,14 +1,14 @@
 name: SkinOverlay
 version: ${project.version}
 main: dev.piglin.skinoverlay.SkinOverlay
-api-version: 1.17
+api-version: 1.13
 authors: [ Iaiao ]
 website: https://piglin.dev/
-commands: 
+commands:
   wear:
     permission: skinoverlay.wear
     usage: /<command> <overlay name>
-permissions: 
+permissions:
   skinoverlay.wear:
     default: true
     description: /wear

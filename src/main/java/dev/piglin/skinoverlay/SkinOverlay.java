@@ -3,17 +3,11 @@ package dev.piglin.skinoverlay;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
 import com.mojang.authlib.properties.Property;
-import net.minecraft.network.protocol.game.PacketPlayOutHeldItemSlot;
-import net.minecraft.network.protocol.game.PacketPlayOutPlayerInfo;
-import net.minecraft.network.protocol.game.PacketPlayOutPosition;
-import net.minecraft.network.protocol.game.PacketPlayOutRespawn;
-import net.minecraft.server.level.EntityPlayer;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.MemorySection;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.craftbukkit.v1_17_R1.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -33,12 +27,8 @@ import java.util.stream.Collectors;
 
 public final class SkinOverlay extends JavaPlugin implements Listener {
 
-    private final HashMap<UUID, Property> skins = new HashMap<>();
+    public final HashMap<UUID, Property> skins = new HashMap<>();
     private final File saveFile = new File(getDataFolder(), "save.yml");
-
-    public static SkinOverlay getInstance() {
-        return getPlugin(SkinOverlay.class);
-    }
 
     @Override
     public void onEnable() {
@@ -78,6 +68,10 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
         }
     }
 
+    public void updateSkin(Player player) {
+        new SkinApplier(this).accept(player);
+    }
+
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         var isPlayer = sender instanceof Player;
@@ -92,7 +86,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
             var overlay = switch (getOverlayList().contains(overlayName) ? 1 : 0) {
                 case 1 -> ImageIO.read(new File(getDataFolder(), overlayName + ".png"));
                 case 0 -> {
-                    if(sender.hasPermission("skinoverlay.wear.url")) {
+                    if (sender.hasPermission("skinoverlay.wear.url")) {
                         yield ImageIO.read(new ByteArrayInputStream(request(overlayName, "GET", null)));
                     } else {
                         yield null;
@@ -100,7 +94,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                 }
                 default -> throw new IllegalStateException("Unexpected value: " + (getOverlayList().contains(overlayName) ? 1 : 0));
             };
-            if(overlay == null) return false; 
+            if (overlay == null) return false;
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
                 try {
                     var profileBytes = request(String.format("https://sessionserver.mojang.com/session/minecraft/profile/%s", target.getUniqueId().toString().replaceAll("-", "")), "GET", null);
@@ -173,69 +167,6 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                 .collect(Collectors.toList());
     }
 
-    public void updateSkin(Player player) {
-        if (!skins.containsKey(player.getUniqueId())) return;
-        var cp = (CraftPlayer) player;
-        var profile = cp.getProfile();
-        profile.getProperties().removeAll("textures");
-        profile.getProperties().put("textures", skins.get(player.getUniqueId()));
-        var ep = cp.getHandle();
-
-        var removeInfo = new PacketPlayOutPlayerInfo(
-                PacketPlayOutPlayerInfo.EnumPlayerInfoAction.e, ep);
-        var addInfo = new PacketPlayOutPlayerInfo(
-                PacketPlayOutPlayerInfo.EnumPlayerInfoAction.a, ep);
-
-        var worldServer = ep.getWorldServer();
-
-        var respawn = new PacketPlayOutRespawn(worldServer.getDimensionManager(), worldServer.getDimensionKey(),
-                worldServer.getSeed(), ep.d.getGameMode(), ep.d.c(),
-                worldServer.isDebugWorld(), worldServer.isFlatWorld(), true);
-
-        var position = new PacketPlayOutPosition(
-                player.getLocation().getX(),
-                player.getLocation().getY(),
-                player.getLocation().getZ(),
-                player.getLocation().getYaw(),
-                player.getLocation().getPitch(),
-                Collections.emptySet(),
-                0,
-                false
-        );
-        var slot = new PacketPlayOutHeldItemSlot(player.getInventory().getHeldItemSlot());
-
-        getServer().getScheduler().runTask(this, () -> sendUpdate(ep, removeInfo, addInfo, respawn, position, slot));
-    }
-
-    private void sendUpdate(EntityPlayer ep,
-                            PacketPlayOutPlayerInfo removeInfo,
-                            PacketPlayOutPlayerInfo addInfo,
-                            PacketPlayOutRespawn respawn,
-                            PacketPlayOutPosition position,
-                            PacketPlayOutHeldItemSlot slot) {
-
-        var player = ep.getBukkitEntity();
-
-        for (Player p : getServer().getOnlinePlayers()) {
-            p.hidePlayer(this, player);
-            p.showPlayer(this, player);
-        }
-
-        ep.b.sendPacket(removeInfo);
-        ep.b.sendPacket(addInfo);
-        ep.b.sendPacket(respawn);
-        ep.b.sendPacket(position);
-        ep.b.sendPacket(slot);
-
-        player.updateScaledHealth();
-        player.recalculatePermissions();
-        ep.updateAbilities();
-        if(player.isOp()) {
-            player.setOp(false);
-            player.setOp(true);
-        }
-        player.updateInventory();
-    }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
