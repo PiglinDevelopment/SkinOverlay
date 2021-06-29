@@ -32,6 +32,11 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
+        if(!getServer().getOnlineMode()) {
+            getLogger().severe("\033[31;1mThis plugin doesn't work on offline-mode servers.\033[0m");
+            setEnabled(false);
+            return;
+        }
         saveDefaultConfig();
         for (String resource : new String[]{"none", "policeman", "mustache"}) {
             if (!new File(getDataFolder(), resource + ".png").exists())
@@ -52,6 +57,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        if(!getServer().getOnlineMode()) return;
         try {
             if (!saveFile.exists()) saveFile.createNewFile();
             var save = YamlConfiguration.loadConfiguration(saveFile);
