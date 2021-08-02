@@ -90,7 +90,13 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
         var overlayName = others ? args[1] : args[0];
         try {
             var overlay = switch (getOverlayList().contains(overlayName) ? 1 : 0) {
-                case 1 -> ImageIO.read(new File(getDataFolder(), overlayName + ".png"));
+                case 1 -> {
+                    if(sender.hasPermission("skinoverlay.overlay." + overlayName)) {
+                        yield ImageIO.read(new File(getDataFolder(), overlayName + ".png"));
+                    } else {
+                        yield null;
+                    }
+                }
                 case 0 -> {
                     if (sender.hasPermission("skinoverlay.wear.url")) {
                         yield ImageIO.read(new ByteArrayInputStream(request(overlayName, "GET", null)));
