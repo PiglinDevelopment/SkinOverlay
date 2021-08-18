@@ -71,8 +71,17 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
         }
     }
 
-    public void updateSkin(Player player) {
+    public void updateSkin(Player player, boolean forOthers) {
         new SkinApplier(this).accept(player);
+        if(forOthers) {
+            getServer().getOnlinePlayers()
+                    .stream()
+                    .filter(p -> p != player)
+                    .forEach(p -> {
+                        p.hidePlayer(this, player);
+                        p.showPlayer(this, player);
+                    });
+        }
     }
 
     @Override
@@ -151,7 +160,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                                     var texturesValue = texture.get("value").getAsString();
                                     var texturesSignature = texture.get("signature").getAsString();
                                     skins.put(target.getUniqueId(), new Property("textures", texturesValue, texturesSignature));
-                                    updateSkin(target);
+                                    updateSkin(target, true);
                                     sender.sendMessage(message("done").replaceAll("\\{minecrafttextures}", texture.get("url").getAsString()));
                                 }
                                 default -> sender.sendMessage(message("unknown error"));
@@ -199,7 +208,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        getServer().getScheduler().runTask(this, () -> updateSkin(event.getPlayer()));
+        getServer().getScheduler().runTask(this, () -> updateSkin(event.getPlayer(), false));
     }
 
     private byte[] request(String url, String method, byte[] data) {
