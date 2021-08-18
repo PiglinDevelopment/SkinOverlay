@@ -32,10 +32,8 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        if(!getServer().getOnlineMode()) {
-            getLogger().severe("\033[31;1mThis plugin doesn't work on offline-mode servers.\033[0m");
-            setEnabled(false);
-            return;
+        if (!getServer().getOnlineMode()) {
+            getLogger().severe("\033[31;1mThis plugin doesn't work properly on offline-mode servers.\033[0m");
         }
         saveDefaultConfig();
         for (String resource : new String[]{"none", "policeman", "mustache"}) {
@@ -57,7 +55,6 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        if(!getServer().getOnlineMode()) return;
         try {
             if (!saveFile.exists()) saveFile.createNewFile();
             var save = YamlConfiguration.loadConfiguration(saveFile);
@@ -91,7 +88,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
         try {
             var overlay = switch (getOverlayList().contains(overlayName) ? 1 : 0) {
                 case 1 -> {
-                    if(sender.hasPermission("skinoverlay.overlay." + overlayName)) {
+                    if (sender.hasPermission("skinoverlay.overlay." + overlayName)) {
                         yield ImageIO.read(new File(getDataFolder(), overlayName + ".png"));
                     } else {
                         yield null;
