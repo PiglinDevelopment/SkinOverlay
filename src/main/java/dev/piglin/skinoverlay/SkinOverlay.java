@@ -72,16 +72,18 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
     }
 
     public void updateSkin(Player player, boolean forOthers) {
-        new SkinApplier(this).accept(player);
-        if(forOthers) {
-            getServer().getOnlinePlayers()
-                    .stream()
-                    .filter(p -> p != player)
-                    .forEach(p -> {
-                        p.hidePlayer(this, player);
-                        p.showPlayer(this, player);
-                    });
-        }
+        getServer().getScheduler().runTask(this, () -> {
+            new SkinApplier(this).accept(player);
+            if (forOthers) {
+                getServer().getOnlinePlayers()
+                        .stream()
+                        .filter(p -> p != player)
+                        .forEach(p -> {
+                            p.hidePlayer(this, player);
+                            p.showPlayer(this, player);
+                        });
+            }
+        });
     }
 
     @Override
