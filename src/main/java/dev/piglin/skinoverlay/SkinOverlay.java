@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.imageio.ImageIO;
@@ -29,6 +30,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     public final HashMap<UUID, Property> skins = new HashMap<>();
     private final File saveFile = new File(getDataFolder(), "save.yml");
+    boolean save;
 
     @Override
     public void onEnable() {
@@ -36,38 +38,43 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
             getLogger().severe("\033[31;1mThis plugin doesn't work properly on offline-mode servers.\033[0m");
         }
         saveDefaultConfig();
+        save = getConfig().getBoolean("save");
         for (String resource : new String[]{"none", "policeman", "mustache"}) {
             if (!new File(getDataFolder(), resource + ".png").exists())
                 saveResource(resource + ".png", false);
         }
         getServer().getPluginManager().registerEvents(this, this);
-        try {
-            if (!saveFile.exists()) saveFile.createNewFile();
-            var save = YamlConfiguration.loadConfiguration(saveFile);
-            save.getValues(false).forEach((uuid, property) -> {
-                var prop = (MemorySection) property;
-                skins.put(UUID.fromString(uuid), new Property("textures", prop.getString("value"), prop.getString("signature")));
-            });
-        } catch (IOException e) {
-            e.printStackTrace();
+        if(save) {
+            try {
+                if (!saveFile.exists()) saveFile.createNewFile();
+                var save = YamlConfiguration.loadConfiguration(saveFile);
+                save.getValues(false).forEach((uuid, property) -> {
+                    var prop = (MemorySection) property;
+                    skins.put(UUID.fromString(uuid), new Property("textures", prop.getString("value"), prop.getString("signature")));
+                });
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
     @Override
     public void onDisable() {
-        try {
-            if (!saveFile.exists()) saveFile.createNewFile();
-            var save = YamlConfiguration.loadConfiguration(saveFile);
-            skins.forEach((uuid, property) -> {
-                var map = new HashMap<>();
-                map.put("value", property.getValue());
-                map.put("signature", property.getSignature());
-                save.set(uuid.toString(), map);
-            });
-            save.save(saveFile);
-            skins.clear();
-        } catch (IOException e) {
-            e.printStackTrace();
+        if(save) {
+            try {
+                if (!saveFile.exists()) saveFile.createNewFile();
+                var save = YamlConfiguration.loadConfiguration(saveFile);
+                skins.forEach((uuid, property) -> {
+                    var map = new HashMap<>();
+                    map.put("value", property.getValue());
+                    map.put("signature", property.getSignature());
+                    save.set(uuid.toString(), map);
+                });
+                save.save(saveFile);
+                skins.clear();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 

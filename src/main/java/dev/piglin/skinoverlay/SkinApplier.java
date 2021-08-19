@@ -95,6 +95,7 @@ public class SkinApplier implements Consumer<Player> {
             PropertyMap properties = profile.getProperties();
             properties.removeAll("textures");
             properties.put("textures", plugin.skins.get(player.getUniqueId()));
+            if(!plugin.save) plugin.skins.remove(player.getUniqueId());
 
             Location l = player.getLocation();
 
