@@ -12,7 +12,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.imageio.ImageIO;
@@ -31,6 +30,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
     public final HashMap<UUID, Property> skins = new HashMap<>();
     private final File saveFile = new File(getDataFolder(), "save.yml");
     boolean save;
+    boolean allowHttp;
 
     @Override
     public void onEnable() {
@@ -39,6 +39,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
         }
         saveDefaultConfig();
         save = getConfig().getBoolean("save");
+        allowHttp = getConfig().getBoolean("allow http");
         for (String resource : new String[]{"none", "policeman", "mustache"}) {
             if (!new File(getDataFolder(), resource + ".png").exists())
                 saveResource(resource + ".png", false);
@@ -115,7 +116,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                 case 0 -> {
                     if (sender.hasPermission("skinoverlay.wear.url")) {
                         try {
-                            yield ImageIO.read(new ByteArrayInputStream(request(overlayName, "GET", null)));
+                            yield ImageIO.read(new ByteArrayInputStream(request(overlayName)));
                         } catch (Exception exception) {
                             yield null;
                         }
@@ -128,7 +129,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
             if (overlay == null) return false;
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
                 try {
-                    var profileBytes = request(String.format("https://sessionserver.mojang.com/session/minecraft/profile/%s", target.getUniqueId().toString().replaceAll("-", "")), "GET", null);
+                    var profileBytes = request(String.format("https://sessionserver.mojang.com/session/minecraft/profile/%s", target.getUniqueId().toString().replaceAll("-", "")));
                     var json = new JsonParser().parse(new String(profileBytes));
                     JsonArray properties = json.getAsJsonObject().get("properties").getAsJsonArray();
                     for (var object : properties) {
@@ -224,16 +225,15 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
         getServer().getScheduler().runTask(this, () -> updateSkin(event.getPlayer(), false));
     }
 
-    private byte[] request(String url, String method, byte[] data) {
+    private byte[] request(String address) {
         try {
-            var con = (HttpsURLConnection) new URL(url).openConnection();
-            con.setRequestMethod(method);
-            con.setRequestProperty("User-Agent", "SkinOverlay");
-            if (data != null) {
-                con.setDoOutput(true);
-                con.getOutputStream().write(data);
-                con.getOutputStream().close();
+            var url = new URL(address);
+            if(!url.getProtocol().startsWith("https") && !(url.getProtocol().startsWith("http") && allowHttp)) {
+                throw new IllegalArgumentException("Tried to use non-https protocol");
             }
+            var con = (HttpsURLConnection) url.openConnection();
+            con.setRequestMethod("GET");
+            con.setRequestProperty("User-Agent", "SkinOverlay");
             var status = con.getResponseCode();
             assert status == 200;
             return con.getInputStream().readAllBytes();

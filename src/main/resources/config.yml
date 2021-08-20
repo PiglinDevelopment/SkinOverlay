@@ -4,3 +4,4 @@ messages:
   too many requests: "&eWait a few seconds and try again"
 
 save: on
+allow http: off # Support both HTTP and HTTPS or only HTTPS?
