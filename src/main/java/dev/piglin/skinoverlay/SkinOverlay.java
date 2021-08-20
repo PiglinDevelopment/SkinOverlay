@@ -114,7 +114,11 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                 }
                 case 0 -> {
                     if (sender.hasPermission("skinoverlay.wear.url")) {
-                        yield ImageIO.read(new ByteArrayInputStream(request(overlayName, "GET", null)));
+                        try {
+                            yield ImageIO.read(new ByteArrayInputStream(request(overlayName, "GET", null)));
+                        } catch (Exception exception) {
+                            yield null;
+                        }
                     } else {
                         yield null;
                     }
