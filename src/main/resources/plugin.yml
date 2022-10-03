@@ -1,9 +1,8 @@
 name: SkinOverlay
-version: ${project.version}
+version: 1.7.0
 main: dev.piglin.skinoverlay.SkinOverlay
-api-version: 1.13
+api-version: 1.19
 authors: [ Iaiao ]
-website: https://piglin.dev/
 commands:
   wear:
     permission: skinoverlay.wear

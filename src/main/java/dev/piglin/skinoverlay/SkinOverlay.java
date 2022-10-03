@@ -2,7 +2,9 @@ package dev.piglin.skinoverlay;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
+import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import com.mojang.authlib.properties.PropertyMap;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -13,6 +15,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 
 import javax.imageio.ImageIO;
 import javax.net.ssl.HttpsURLConnection;
@@ -81,7 +84,9 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     public void updateSkin(Player player, boolean forOthers) {
         getServer().getScheduler().runTask(this, () -> {
-            new SkinApplier(this).accept(player);
+            player.hidePlayer(this, player);
+            player.showPlayer(this, player);
+            new SkinApplier().accept(player);
             if (forOthers) {
                 getServer().getOnlinePlayers()
                         .stream()
@@ -95,7 +100,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
         var isPlayer = sender instanceof Player;
         var requiredArguments = isPlayer ? 1 : 2;
         if (args.length < requiredArguments || args.length > 2) return false;
@@ -130,13 +135,13 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
                 try {
                     var profileBytes = request(String.format("https://sessionserver.mojang.com/session/minecraft/profile/%s", target.getUniqueId().toString().replaceAll("-", "")));
-                    var json = new JsonParser().parse(new String(profileBytes));
+                    var json = JsonParser.parseString(new String(profileBytes));
                     JsonArray properties = json.getAsJsonObject().get("properties").getAsJsonArray();
                     for (var object : properties) {
                         if (object.getAsJsonObject().get("name").getAsString().equals("textures")) {
                             var base64 = object.getAsJsonObject().get("value").getAsString();
                             var value = new String(Base64.getDecoder().decode(base64));
-                            var textureJson = new JsonParser().parse(value);
+                            var textureJson = JsonParser.parseString(value);
                             var skinUrl = textureJson.getAsJsonObject().getAsJsonObject("textures").getAsJsonObject("SKIN").get("url").getAsString();
                             var skin = ImageIO.read(new URL(skinUrl));
                             var image = new BufferedImage(skin.getWidth(), skin.getHeight(), BufferedImage.TYPE_INT_ARGB);
@@ -169,11 +174,18 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                             switch (status) {
                                 case 429 -> sender.sendMessage(message("too many requests"));
                                 case 200 -> {
-                                    var response = new JsonParser().parse(new String(con.getInputStream().readAllBytes()));
+                                    var response = JsonParser.parseString(new String(con.getInputStream().readAllBytes()));
                                     var texture = response.getAsJsonObject().getAsJsonObject("data").getAsJsonObject("texture");
                                     var texturesValue = texture.get("value").getAsString();
                                     var texturesSignature = texture.get("signature").getAsString();
                                     skins.put(target.getUniqueId(), new Property("textures", texturesValue, texturesSignature));
+                                    
+                                    GameProfile gameProfile = SkinApplier.extractServerPlayer(target).gameProfile;
+                                    PropertyMap propertyMap = gameProfile.getProperties();
+                                    propertyMap.removeAll("textures");
+                                    propertyMap.put("textures", skins.get(target.getUniqueId()));
+                                    if(!save) skins.remove(target.getUniqueId());
+                                    
                                     updateSkin(target, true);
                                     sender.sendMessage(message("done").replaceAll("\\{minecrafttextures}", texture.get("url").getAsString()));
                                 }
@@ -192,7 +204,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
     }
 
     public List<String> getOverlayList() {
-        return Arrays.stream(getDataFolder().listFiles())
+        return Arrays.stream(Objects.requireNonNull(getDataFolder().listFiles()))
                 .map(File::getName)
                 .filter(file -> file.endsWith(".png"))
                 .map(file -> file.substring(0, file.length() - 4))
@@ -243,6 +255,6 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
     }
 
     private String message(String path) {
-        return ChatColor.translateAlternateColorCodes('&', getConfig().getString("messages." + path));
+        return ChatColor.translateAlternateColorCodes('&', Objects.requireNonNull(getConfig().getString("messages." + path)));
     }
 }
