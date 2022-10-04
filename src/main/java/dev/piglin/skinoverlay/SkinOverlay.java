@@ -48,7 +48,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                 saveResource(resource + ".png", false);
         }
         getServer().getPluginManager().registerEvents(this, this);
-        if(save) {
+        if (save) {
             try {
                 if (!saveFile.exists()) saveFile.createNewFile();
                 var save = YamlConfiguration.loadConfiguration(saveFile);
@@ -64,7 +64,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        if(save) {
+        if (save) {
             try {
                 if (!saveFile.exists()) saveFile.createNewFile();
                 var save = YamlConfiguration.loadConfiguration(saveFile);
@@ -83,6 +83,11 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
     }
 
     public void updateSkin(Player player, boolean forOthers) {
+        if (!skins.containsKey(player.getUniqueId())) return;
+        GameProfile gameProfile = SkinApplier.extractServerPlayer(player).gameProfile;
+        PropertyMap propertyMap = gameProfile.getProperties();
+        propertyMap.removeAll("textures");
+        propertyMap.put("textures", skins.get(player.getUniqueId()));
         getServer().getScheduler().runTask(this, () -> {
             player.hidePlayer(this, player);
             player.showPlayer(this, player);
@@ -129,7 +134,8 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                         yield null;
                     }
                 }
-                default -> throw new IllegalStateException("Unexpected value: " + (getOverlayList().contains(overlayName) ? 1 : 0));
+                default ->
+                        throw new IllegalStateException("Unexpected value: " + (getOverlayList().contains(overlayName) ? 1 : 0));
             };
             if (overlay == null) return false;
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
@@ -179,14 +185,8 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                                     var texturesValue = texture.get("value").getAsString();
                                     var texturesSignature = texture.get("signature").getAsString();
                                     skins.put(target.getUniqueId(), new Property("textures", texturesValue, texturesSignature));
-                                    
-                                    GameProfile gameProfile = SkinApplier.extractServerPlayer(target).gameProfile;
-                                    PropertyMap propertyMap = gameProfile.getProperties();
-                                    propertyMap.removeAll("textures");
-                                    propertyMap.put("textures", skins.get(target.getUniqueId()));
-                                    if(!save) skins.remove(target.getUniqueId());
-                                    
                                     updateSkin(target, true);
+                                    if (!save) skins.remove(target.getUniqueId());
                                     sender.sendMessage(message("done").replaceAll("\\{minecrafttextures}", texture.get("url").getAsString()));
                                 }
                                 default -> sender.sendMessage(message("unknown error"));
@@ -240,7 +240,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
     private byte[] request(String address) {
         try {
             var url = new URL(address);
-            if(!url.getProtocol().startsWith("https") && !(url.getProtocol().startsWith("http") && allowHttp)) {
+            if (!url.getProtocol().startsWith("https") && !(url.getProtocol().startsWith("http") && allowHttp)) {
                 throw new IllegalArgumentException("Tried to use non-https protocol");
             }
             var con = (HttpsURLConnection) url.openConnection();
