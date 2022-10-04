@@ -234,7 +234,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        getServer().getScheduler().runTask(this, () -> updateSkin(event.getPlayer(), false));
+        getServer().getScheduler().runTask(this, () -> updateSkin(event.getPlayer(), true));
     }
 
     private byte[] request(String address) {
