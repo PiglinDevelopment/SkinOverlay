@@ -5,6 +5,12 @@ import com.google.gson.JsonParser;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.properties.PropertyMap;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import dev.piglin.skinoverlay.utils.commands.SimpleSuggestionProvider;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -15,10 +21,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.jetbrains.annotations.NotNull;
 
 import javax.imageio.ImageIO;
 import javax.net.ssl.HttpsURLConnection;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -26,6 +32,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public final class SkinOverlay extends JavaPlugin implements Listener {
@@ -44,8 +51,9 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
         save = getConfig().getBoolean("save");
         allowHttp = getConfig().getBoolean("allow http");
         for (String resource : new String[]{"none", "policeman", "mustache"}) {
-            if (!new File(getDataFolder(), resource + ".png").exists())
+            if (!new File(getDataFolder(), resource + ".png").exists()) {
                 saveResource(resource + ".png", false);
+            }
         }
         getServer().getPluginManager().registerEvents(this, this);
         if (save) {
@@ -60,6 +68,54 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                 e.printStackTrace();
             }
         }
+        MinecraftServer
+                .getServer()
+                .getCommands()
+                .getDispatcher().register(Commands.literal("wear")
+                        .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear"))
+                        .then(Commands.literal("url")
+                                .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear.url") && !sender.getBukkitSender().hasPermission("skinoverlay.wear.others"))
+                                .then(Commands.argument("url", StringArgumentType.greedyString())
+                                        .executes(context -> {
+                                            String url = StringArgumentType.getString(context, "url");
+                                            return setSkin(() -> ImageIO.read(new ByteArrayInputStream(request(url))), context.getSource().getBukkitSender(), context.getSource().getPlayerOrException());
+                                        })))
+                        .then(Commands.argument("name", StringArgumentType.string())
+                                .requires(sender -> !sender.getBukkitSender().hasPermission("skinoverlay.wear.others"))
+                                .suggests(SimpleSuggestionProvider.noTooltip("name", context -> getOverlayList()
+                                        .stream()
+                                        .filter(overlay -> context.getSource().getBukkitSender().hasPermission("skinoverlay.overlay." + overlay))
+                                        .toList()))
+                                .executes(context -> {
+                                    String overlay = StringArgumentType.getString(context, "name");
+                                    if (!context.getSource().getBukkitSender().hasPermission("skinoverlay.overlay." + overlay)) {
+                                        context.getSource().getBukkitSender().sendMessage(message("no permission"));
+                                        return 0;
+                                    }
+                                    return setSkin(() -> ImageIO.read(new File(getDataFolder(), overlay + ".png")), context.getSource().getBukkitSender(), context.getSource().getPlayerOrException());
+                                }))
+                        .then(Commands.argument("targets", EntityArgument.players())
+                                .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear.others"))
+                                .then(Commands.literal("url")
+                                        .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear.url"))
+                                        .then(Commands.argument("url", StringArgumentType.greedyString())
+                                                .executes(context -> {
+                                                    String url = StringArgumentType.getString(context, "url");
+                                                    return setSkin(() -> ImageIO.read(new ByteArrayInputStream(request(url))), context.getSource().getBukkitSender(), EntityArgument.getPlayers(context, "targets").toArray(ServerPlayer[]::new));
+                                                })))
+                                .then(Commands.argument("name", StringArgumentType.string())
+                                        .suggests(SimpleSuggestionProvider.noTooltip("name", context -> getOverlayList()
+                                                .stream()
+                                                .filter(overlay -> context.getSource().getBukkitSender().hasPermission("skinoverlay.overlay." + overlay))
+                                                .toList()))
+                                        .executes(context -> {
+                                            String overlay = StringArgumentType.getString(context, "name");
+                                            if (!context.getSource().getBukkitSender().hasPermission("skinoverlay.overlay." + overlay)) {
+                                                context.getSource().getBukkitSender().sendMessage(message("no permission"));
+                                                return 0;
+                                            }
+                                            return setSkin(() -> ImageIO.read(new File(getDataFolder(), overlay + ".png")), context.getSource().getBukkitSender(), EntityArgument.getPlayers(context, "targets").toArray(ServerPlayer[]::new));
+                                        }))));
     }
 
     @Override
@@ -82,66 +138,16 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
         }
     }
 
-    public void updateSkin(Player player, boolean forOthers) {
-        if (!skins.containsKey(player.getUniqueId())) return;
-        GameProfile gameProfile = SkinApplier.extractServerPlayer(player).gameProfile;
-        PropertyMap propertyMap = gameProfile.getProperties();
-        propertyMap.removeAll("textures");
-        propertyMap.put("textures", skins.get(player.getUniqueId()));
-        getServer().getScheduler().runTask(this, () -> {
-            player.hidePlayer(this, player);
-            player.showPlayer(this, player);
-            new SkinApplier().accept(player);
-            if (forOthers) {
-                getServer().getOnlinePlayers()
-                        .stream()
-                        .filter(p -> p != player)
-                        .forEach(p -> {
-                            p.hidePlayer(this, player);
-                            p.showPlayer(this, player);
-                        });
+    public int setSkin(ImageSupplier imageSupplier, CommandSender sender, ServerPlayer... players) {
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            Image overlay;
+            try {
+                overlay = imageSupplier.get();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-        });
-    }
-
-    @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
-        var isPlayer = sender instanceof Player;
-        var requiredArguments = isPlayer ? 1 : 2;
-        if (args.length < requiredArguments || args.length > 2) return false;
-        var others = args.length == 2;
-        if (others && !sender.hasPermission("skinoverlay.wear.others")) return false;
-        var target = others ? getServer().getPlayer(args[0]) : (Player) sender;
-        if (target == null) return false;
-        var overlayName = others ? args[1] : args[0];
-        try {
-            var overlay = switch (getOverlayList().contains(overlayName) ? 1 : 0) {
-                case 1 -> {
-                    if (sender.hasPermission("skinoverlay.overlay." + overlayName)) {
-                        yield ImageIO.read(new File(getDataFolder(), overlayName + ".png"));
-                    } else {
-                        yield null;
-                    }
-                }
-                case 0 -> {
-                    if (sender.hasPermission("skinoverlay.wear.url")) {
-                        try {
-                            yield ImageIO.read(new ByteArrayInputStream(request(overlayName)));
-                        } catch (Exception exception) {
-                            yield null;
-                        }
-                    } else {
-                        yield null;
-                    }
-                }
-                default ->
-                        throw new IllegalStateException("Unexpected value: " + (getOverlayList().contains(overlayName) ? 1 : 0));
-            };
-            if (overlay == null) {
-                sender.sendMessage(message("no permission"));
-                return true;
-            }
-            getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            for (ServerPlayer serverPlayer : players) {
+                Player target = serverPlayer.getBukkitEntity();
                 try {
                     var profileBytes = request(String.format("https://sessionserver.mojang.com/session/minecraft/profile/%s", target.getUniqueId().toString().replaceAll("-", "")));
                     var json = JsonParser.parseString(new String(profileBytes));
@@ -197,13 +203,33 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                         }
                     }
                 } catch (Exception exception) {
-                    throw new IllegalStateException("Unexpected error", exception);
+                    throw new RuntimeException(exception);
                 }
-            });
-        } catch (IOException e) {
-            sender.sendMessage(message("unknown error"));
-        }
-        return true;
+            }
+        });
+        return players.length;
+    }
+
+    public void updateSkin(Player player, boolean forOthers) {
+        if (!skins.containsKey(player.getUniqueId())) return;
+        GameProfile gameProfile = SkinApplier.extractServerPlayer(player).getGameProfile();
+        PropertyMap propertyMap = gameProfile.getProperties();
+        propertyMap.removeAll("textures");
+        propertyMap.put("textures", skins.get(player.getUniqueId()));
+        getServer().getScheduler().runTask(this, () -> {
+            player.hidePlayer(this, player);
+            player.showPlayer(this, player);
+            new SkinApplier().accept(player);
+            if (forOthers) {
+                getServer().getOnlinePlayers()
+                        .stream()
+                        .filter(p -> p != player)
+                        .forEach(p -> {
+                            p.hidePlayer(this, player);
+                            p.showPlayer(this, player);
+                        });
+            }
+        });
     }
 
     public List<String> getOverlayList() {
@@ -259,5 +285,10 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
 
     private String message(String path) {
         return ChatColor.translateAlternateColorCodes('&', Objects.requireNonNull(getConfig().getString("messages." + path)));
+    }
+
+    @FunctionalInterface
+    private interface ImageSupplier {
+        Image get() throws IOException;
     }
 }
