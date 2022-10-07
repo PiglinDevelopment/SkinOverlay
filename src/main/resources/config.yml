@@ -2,6 +2,7 @@ messages:
   done: "&aSkin changed. Minecraft texture URL: {minecrafttextures}"
   unknown error: "&cUnknown error. Try again later"
   too many requests: "&eWait a few seconds and try again"
+  no permission: "&cYou're not allowed to use this overlay"
 
 save: on
 allow http: off # Support both HTTP and HTTPS or only HTTPS?

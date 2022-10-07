@@ -137,7 +137,10 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                 default ->
                         throw new IllegalStateException("Unexpected value: " + (getOverlayList().contains(overlayName) ? 1 : 0));
             };
-            if (overlay == null) return false;
+            if (overlay == null) {
+                sender.sendMessage(message("no permission"));
+                return true;
+            }
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
                 try {
                     var profileBytes = request(String.format("https://sessionserver.mojang.com/session/minecraft/profile/%s", target.getUniqueId().toString().replaceAll("-", "")));
