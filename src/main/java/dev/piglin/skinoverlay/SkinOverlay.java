@@ -73,27 +73,6 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                 .getCommands()
                 .getDispatcher().register(Commands.literal("wear")
                         .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear"))
-                        .then(Commands.literal("url")
-                                .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear.url") && !sender.getBukkitSender().hasPermission("skinoverlay.wear.others"))
-                                .then(Commands.argument("url", StringArgumentType.greedyString())
-                                        .executes(context -> {
-                                            String url = StringArgumentType.getString(context, "url");
-                                            return setSkin(() -> ImageIO.read(new ByteArrayInputStream(request(url))), context.getSource().getBukkitSender(), context.getSource().getPlayerOrException());
-                                        })))
-                        .then(Commands.argument("name", StringArgumentType.string())
-                                .requires(sender -> !sender.getBukkitSender().hasPermission("skinoverlay.wear.others"))
-                                .suggests(SimpleSuggestionProvider.noTooltip("name", context -> getOverlayList()
-                                        .stream()
-                                        .filter(overlay -> context.getSource().getBukkitSender().hasPermission("skinoverlay.overlay." + overlay))
-                                        .toList()))
-                                .executes(context -> {
-                                    String overlay = StringArgumentType.getString(context, "name");
-                                    if (!context.getSource().getBukkitSender().hasPermission("skinoverlay.overlay." + overlay)) {
-                                        context.getSource().getBukkitSender().sendMessage(message("no permission"));
-                                        return 0;
-                                    }
-                                    return setSkin(() -> ImageIO.read(new File(getDataFolder(), overlay + ".png")), context.getSource().getBukkitSender(), context.getSource().getPlayerOrException());
-                                }))
                         .then(Commands.argument("targets", EntityArgument.players())
                                 .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear.others"))
                                 .then(Commands.literal("url")
@@ -115,7 +94,27 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                                                 return 0;
                                             }
                                             return setSkin(() -> ImageIO.read(new File(getDataFolder(), overlay + ".png")), context.getSource().getBukkitSender(), EntityArgument.getPlayers(context, "targets").toArray(ServerPlayer[]::new));
-                                        }))));
+                                        })))
+                        .then(Commands.literal("url")
+                                .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear.url"))
+                                .then(Commands.argument("url", StringArgumentType.greedyString())
+                                        .executes(context -> {
+                                            String url = StringArgumentType.getString(context, "url");
+                                            return setSkin(() -> ImageIO.read(new ByteArrayInputStream(request(url))), context.getSource().getBukkitSender(), context.getSource().getPlayerOrException());
+                                        })))
+                        .then(Commands.argument("name", StringArgumentType.string())
+                                .suggests(SimpleSuggestionProvider.noTooltip("name", context -> getOverlayList()
+                                        .stream()
+                                        .filter(overlay -> context.getSource().getBukkitSender().hasPermission("skinoverlay.overlay." + overlay))
+                                        .toList()))
+                                .executes(context -> {
+                                    String overlay = StringArgumentType.getString(context, "name");
+                                    if (!context.getSource().getBukkitSender().hasPermission("skinoverlay.overlay." + overlay)) {
+                                        context.getSource().getBukkitSender().sendMessage(message("no permission"));
+                                        return 0;
+                                    }
+                                    return setSkin(() -> ImageIO.read(new File(getDataFolder(), overlay + ".png")), context.getSource().getBukkitSender(), context.getSource().getPlayerOrException());
+                                })));
     }
 
     @Override
