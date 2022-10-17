@@ -9,7 +9,10 @@ permissions:
     description: /wear
   skinoverlay.wear.others:
     default: op
-    description: /wear <player>
+    description: /wear <player> <...>
   skinoverlay.wear.url:
     default: true
     description: /wear <url>
+  skinoverlay.clear:
+    default: true
+    description: /wear clear

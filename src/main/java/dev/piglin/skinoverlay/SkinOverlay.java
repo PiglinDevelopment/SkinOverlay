@@ -50,7 +50,7 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
         saveDefaultConfig();
         save = getConfig().getBoolean("save");
         allowHttp = getConfig().getBoolean("allow http");
-        for (String resource : new String[]{"none", "policeman", "mustache"}) {
+        for (String resource : new String[]{"policeman", "mustache"}) {
             if (!new File(getDataFolder(), resource + ".png").exists()) {
                 saveResource(resource + ".png", false);
             }
@@ -75,6 +75,9 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                         .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear"))
                         .then(Commands.argument("targets", EntityArgument.players())
                                 .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear.others"))
+                                .then(Commands.literal("clear")
+                                        .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.clear"))
+                                        .executes(context -> setSkin(() -> null, context.getSource().getBukkitSender(), EntityArgument.getPlayers(context, "targets").toArray(ServerPlayer[]::new))))
                                 .then(Commands.literal("url")
                                         .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear.url"))
                                         .then(Commands.argument("url", StringArgumentType.greedyString())
@@ -95,14 +98,18 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
                                             }
                                             return setSkin(() -> ImageIO.read(new File(getDataFolder(), overlay + ".png")), context.getSource().getBukkitSender(), EntityArgument.getPlayers(context, "targets").toArray(ServerPlayer[]::new));
                                         })))
+                        .then(Commands.literal("clear")
+                                .requires(sender -> sender.getBukkitSender() instanceof Player && sender.getBukkitSender().hasPermission("skinoverlay.clear"))
+                                .executes(context -> setSkin(() -> null, context.getSource().getBukkitSender(), context.getSource().getPlayerOrException())))
                         .then(Commands.literal("url")
-                                .requires(sender -> sender.getBukkitSender().hasPermission("skinoverlay.wear.url"))
+                                .requires(sender -> sender.getBukkitSender() instanceof Player && sender.getBukkitSender().hasPermission("skinoverlay.wear.url"))
                                 .then(Commands.argument("url", StringArgumentType.greedyString())
                                         .executes(context -> {
                                             String url = StringArgumentType.getString(context, "url");
                                             return setSkin(() -> ImageIO.read(new ByteArrayInputStream(request(url))), context.getSource().getBukkitSender(), context.getSource().getPlayerOrException());
                                         })))
                         .then(Commands.argument("name", StringArgumentType.string())
+                                .requires(sender -> sender.getBukkitSender() instanceof Player)
                                 .suggests(SimpleSuggestionProvider.noTooltip("name", context -> getOverlayList()
                                         .stream()
                                         .filter(overlay -> context.getSource().getBukkitSender().hasPermission("skinoverlay.overlay." + overlay))
@@ -145,14 +152,23 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+            players:
             for (ServerPlayer serverPlayer : players) {
                 Player target = serverPlayer.getBukkitEntity();
                 try {
-                    var profileBytes = request(String.format("https://sessionserver.mojang.com/session/minecraft/profile/%s", target.getUniqueId().toString().replaceAll("-", "")));
+                    var profileBytes = request(String.format("https://sessionserver.mojang.com/session/minecraft/profile/%s?unsigned=false", target.getUniqueId().toString().replaceAll("-", "")));
                     var json = JsonParser.parseString(new String(profileBytes));
                     JsonArray properties = json.getAsJsonObject().get("properties").getAsJsonArray();
                     for (var object : properties) {
                         if (object.getAsJsonObject().get("name").getAsString().equals("textures")) {
+                            if (overlay == null) {
+                                skins.remove(target.getUniqueId());
+                                GameProfile gameProfile = SkinApplier.extractServerPlayer(target).getGameProfile();
+                                gameProfile.getProperties().removeAll("textures");
+                                gameProfile.getProperties().put("textures", new Property(object.getAsJsonObject().get("value").getAsString(), object.getAsJsonObject().get("signature").getAsString()));
+                                updateSkin(target, true);
+                                continue players;
+                            }
                             var base64 = object.getAsJsonObject().get("value").getAsString();
                             var value = new String(Base64.getDecoder().decode(base64));
                             var textureJson = JsonParser.parseString(value);
@@ -210,11 +226,11 @@ public final class SkinOverlay extends JavaPlugin implements Listener {
     }
 
     public void updateSkin(Player player, boolean forOthers) {
-        if (!skins.containsKey(player.getUniqueId())) return;
         GameProfile gameProfile = SkinApplier.extractServerPlayer(player).getGameProfile();
-        PropertyMap propertyMap = gameProfile.getProperties();
-        propertyMap.removeAll("textures");
-        propertyMap.put("textures", skins.get(player.getUniqueId()));
+        if (skins.containsKey(player.getUniqueId())) {
+            gameProfile.getProperties().removeAll("textures");
+            gameProfile.getProperties().put("textures", skins.get(player.getUniqueId()));
+        }
         getServer().getScheduler().runTask(this, () -> {
             player.hidePlayer(this, player);
             player.showPlayer(this, player);

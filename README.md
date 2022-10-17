@@ -11,3 +11,4 @@ This plugin allows you to change your skin's clothes without opening graphical e
 - skinoverlay.wear.others - Wear other players: `/wear <targets> ...`. Supports player names, UUIDs and selectors
 - skinoverlay.wear.url - Wear overlays from custom URLs
 - skinoverlay.overlay.\<overlay name\> - Use the overlay
+- skinoverlay.clear - Remove the overlay
